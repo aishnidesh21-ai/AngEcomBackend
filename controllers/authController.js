@@ -30,32 +30,23 @@ const registerUser = async (req, res) => {
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return res.status(400).json({ message: 'User with this email already exists' });
+      return res.status(400).json({ 
+        message: 'User with this email already exists' 
+      });
     }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create new user
     const user = new User({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      role: role || 'user'
+      password,
+      role: role || 'user' // Default to 'user' if no role specified
     });
 
     await user.save();
 
     // Generate token
     const token = generateToken(user._id);
-
-    // Set cookie for mobile & cross-site
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: true,       // must be true if backend is HTTPS
-      sameSite: 'None',   // allows cross-site cookies
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
 
     // Return user data without password
     const userData = {
@@ -67,6 +58,7 @@ const registerUser = async (req, res) => {
 
     res.status(201).json({
       message: 'User registered successfully',
+      token,
       user: userData
     });
 
@@ -75,10 +67,16 @@ const registerUser = async (req, res) => {
     
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({ message: 'Validation error', errors });
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors 
+      });
     }
 
-    res.status(500).json({ message: 'Server error during registration', error: error.message });
+    res.status(500).json({ 
+      message: 'Server error during registration',
+      error: error.message 
+    });
   }
 };
 
@@ -87,31 +85,39 @@ const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validation
     if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+      return res.status(400).json({ 
+        message: 'Please provide email and password' 
+      });
     }
 
+    // Find user by email
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        message: 'Invalid email or password' 
+      });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Check password - ensure password is defined
+    if (!password) {
+      return res.status(400).json({ 
+        message: 'Password is required' 
+      });
+    }
+    
+    const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        message: 'Invalid email or password' 
+      });
     }
 
     // Generate token
     const token = generateToken(user._id);
 
-    // Set token as cookie for mobile & cross-site
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: true,       // must be true if backend is HTTPS
-      sameSite: 'None',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
-
+    // Return user data without password
     const userData = {
       id: user._id,
       name: user.name,
@@ -121,12 +127,16 @@ const loginUser = async (req, res) => {
 
     res.json({
       message: 'Login successful',
+      token,
       user: userData
     });
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login', error: error.message });
+    res.status(500).json({ 
+      message: 'Server error during login',
+      error: error.message 
+    });
   }
 };
 
@@ -147,7 +157,10 @@ const getUserProfile = async (req, res) => {
     });
   } catch (error) {
     console.error('Profile fetch error:', error);
-    res.status(500).json({ message: 'Server error fetching profile', error: error.message });
+    res.status(500).json({ 
+      message: 'Server error fetching profile',
+      error: error.message 
+    });
   }
 };
 
@@ -161,19 +174,28 @@ const updateUserProfile = async (req, res) => {
     if (name) updateData.name = name.trim();
     if (email) updateData.email = email.toLowerCase().trim();
 
+    // Check if email is already taken by another user
     if (email) {
       const existingUser = await User.findOne({ 
         email: email.toLowerCase(),
         _id: { $ne: userId }
       });
       if (existingUser) {
-        return res.status(400).json({ message: 'Email is already taken by another user' });
+        return res.status(400).json({ 
+          message: 'Email is already taken by another user' 
+        });
       }
     }
 
-    const user = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidators: true }).select('-password');
+    const user = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password');
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     res.json({
       message: 'Profile updated successfully',
@@ -188,9 +210,15 @@ const updateUserProfile = async (req, res) => {
     console.error('Profile update error:', error);
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({ message: 'Validation error', errors });
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors 
+      });
     }
-    res.status(500).json({ message: 'Server error updating profile', error: error.message });
+    res.status(500).json({ 
+      message: 'Server error updating profile',
+      error: error.message 
+    });
   }
 };
 
